@@ -11,16 +11,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install mlflow scikit-learn
 
-      - name: Run training
-        env:
-          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+      - name: Train model
         run: |
           python train.py
 
@@ -30,25 +28,42 @@ jobs:
           name: model_info
           path: model_info.txt
 
+      - name: Upload mlruns
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlruns
+          path: mlruns
+
 
   deploy:
     needs: validate
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download artifact
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download model info
         uses: actions/download-artifact@v4
         with:
           name: model_info
 
-      - name: Install dependencies
+      - name: Download mlruns
+        uses: actions/download-artifact@v4
+        with:
+          name: mlruns
+
+      - name: Install MLflow
         run: |
           pip install mlflow
+
+      - name: Set MLflow URI
+        run: echo "MLFLOW_TRACKING_URI=file:./mlruns" >> $GITHUB_ENV
 
       - name: Check threshold
         run: |
           python check_threshold.py
 
-      - name: Mock Docker build
+      - name: Mock deploy
         run: |
           echo "Building Docker image for Run ID: $(cat model_info.txt)"
