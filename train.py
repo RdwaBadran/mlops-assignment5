@@ -1,32 +1,74 @@
-import mlflow
-from sklearn.datasets import load_digits
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-import os
+name: ML Pipeline
 
-# Ensure mlruns folder exists (optional, can ignore upload)
-os.makedirs("mlruns", exist_ok=True)
+on:
+  push:
+    branches: [ main ]
 
-# Load dataset
-data = load_digits()
-X_train, X_test, y_train, y_test = train_test_split(
-    data.data, data.target, test_size=0.2, random_state=42
-)
+jobs:
+  validate:
+    runs-on: ubuntu-latest
 
-# Set MLflow tracking URI (local)
-mlflow.set_tracking_uri("file:./mlruns")
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-# Start MLflow run
-with mlflow.start_run() as run:
-    model = RandomForestClassifier()
-    model.fit(X_train, y_train)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.10
 
-    # Use high accuracy to guarantee success
-    acc = 0.9
-    mlflow.log_metric("accuracy", acc)
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install dvc mlflow
 
-    print(f"Accuracy: {acc}")
+      - name: Pull data with DVC
+        run: dvc pull
 
-    # Save Run ID for deploy
-    with open("model_info.txt", "w") as f:
-        f.write(run.info.run_id)
+      - name: Train model
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        run: |
+          python train.py
+
+      - name: Save Run ID
+        run: |
+          echo $MLFLOW_RUN_ID > model_info.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-info
+          path: model_info.txt
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: model-info
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: pip install mlflow
+
+      - name: Check accuracy threshold
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        run: |
+          python check_threshold.py
+
+      - name: Mock Docker Build
+        run: |
+          echo "Building Docker image for Run ID: $(cat model_info.txt)"
