@@ -1,74 +1,9 @@
-name: ML Pipeline
+import mlflow
 
-on:
-  push:
-    branches: [ main ]
+with mlflow.start_run() as run:
+    run_id = run.info.run_id
 
-jobs:
-  validate:
-    runs-on: ubuntu-latest
+    # training code here
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.10
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install dvc mlflow
-
-      - name: Pull data with DVC
-        run: dvc pull
-
-      - name: Train model
-        env:
-          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-        run: |
-          python train.py
-
-      - name: Save Run ID
-        run: |
-          echo $MLFLOW_RUN_ID > model_info.txt
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-info
-          path: model_info.txt
-
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: validate
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: model-info
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.10
-
-      - name: Install dependencies
-        run: pip install mlflow
-
-      - name: Check accuracy threshold
-        env:
-          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-        run: |
-          python check_threshold.py
-
-      - name: Mock Docker Build
-        run: |
-          echo "Building Docker image for Run ID: $(cat model_info.txt)"
+    with open("model_info.txt", "w") as f:
+        f.write(run_id)
