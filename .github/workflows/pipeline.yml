@@ -9,9 +9,8 @@ jobs:
 
   validate:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install dependencies
@@ -28,19 +27,11 @@ jobs:
           name: model_info
           path: model_info.txt
 
-      - name: Upload mlruns
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlruns
-          path: mlruns
-
-
   deploy:
     needs: validate
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Download model info
@@ -48,22 +39,10 @@ jobs:
         with:
           name: model_info
 
-      - name: Download mlruns
-        uses: actions/download-artifact@v4
-        with:
-          name: mlruns
-
-      - name: Install MLflow
+      - name: Mock deploy
         run: |
-          pip install mlflow
-
-      - name: Set MLflow URI
-        run: echo "MLFLOW_TRACKING_URI=file:./mlruns" >> $GITHUB_ENV
+          echo "Building Docker image for Run ID: $(cat model_info.txt)"
 
       - name: Check threshold
         run: |
           python check_threshold.py
-
-      - name: Mock deploy
-        run: |
-          echo "Building Docker image for Run ID: $(cat model_info.txt)"
